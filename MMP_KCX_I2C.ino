@@ -1,5 +1,4 @@
 #include <Wire.h>
-//#include <LowPower.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
 
@@ -43,8 +42,8 @@ uint8_t link_name_num = 0;
 
 bool set_power = true;
 bool set_power_value = false;
-bool set_pair = false;
-bool set_pair_value = false;
+bool set_connect = false;
+bool set_connect_value = false;
 bool set_headphone = false;
 bool set_headphone_value = false;
 bool set_volume = false;
@@ -70,9 +69,8 @@ uint8_t genericCommandHandler(const char *response, uint8_t response_pos);
 
 bool isPowered();
 void setPower(bool power_on);
-//void pair();
 void connect(bool connect);
-bool isPaired();
+bool isConnected();
 void setHeadphone(bool headphone_on);
 
 uint8_t getVolumeCallback(const char *response, uint8_t response_pos);
@@ -115,16 +113,16 @@ void setup() {
   pinMode(I2C_SCL, INPUT);
   pinMode(POWER_DETECT_PIN, INPUT);
   digitalWrite(CON_PIN, HIGH);
-  //  digitalWrite(HEADPHONE_EN_PIN, HIGH);
   pinMode(CON_PIN, OUTPUT);
-  //  pinMode(HEADPHONE_EN_PIN, INPUT_PULLUP);
   pinMode(HEADPHONE_EN_PIN, INPUT);
+
   Serial.begin(115200);
   Serial1.begin(115200);
 
   Wire.onReceive(receiveEvent);
   Wire.onRequest(handleRead);
   Wire.begin(I2C_ADDR);
+  // Ensures no internal pullup is used!
   pinMode(I2C_SDA, INPUT);
   pinMode(I2C_SCL, INPUT);
 
@@ -139,15 +137,15 @@ void loop() {
   if (Serial.available()) {
     Serial1.write(Serial.read());
   }
+
   // Echo Bluetooth data (for debugging)
   if (Serial1.available()) {
     Serial.write(Serial1.read());
   }
-  //  Serial.println(millis());
-  //  delay(100);
+
   if (millis() - prev_poll_time > CONNECTION_STATE_POLL_INTERVAL) {
     prev_poll_time = millis();
-    isPaired();
+    isConnected();
     bool powerState = digitalRead(POWER_DETECT_PIN);
     Serial.print("Power state ");
     Serial.println(powerState);
@@ -156,14 +154,14 @@ void loop() {
       setPower(false);
     }
   }
+
   if (set_power) {
     set_power = false;
     setPower(set_power_value > 0);
   }
-  if (set_pair) {
-    set_pair = false;
-    connect(set_pair_value > 0);
-    //    pair();
+  if (set_connect) {
+    set_connect = false;
+    connect(set_connect_value > 0);
   }
   if (set_headphone) {
     set_headphone = false;
@@ -184,7 +182,7 @@ void loop() {
   }
   if (get_pair) {
     get_pair = false;
-    isPaired();
+    isConnected();
   }
   if (get_volume) {
     get_volume = false;
@@ -194,14 +192,10 @@ void loop() {
 
 uint8_t genericCommandHandler(const char *response, uint8_t response_pos)
 {
-  //  Serial.print("genericCommandHandler ");
-  //  Serial.print(response);
-  //  Serial.print(" ");
-  //  Serial.println(response_pos);
   if (strnstr(response, "OK+", response_pos)) {
-    //    Serial.println("RESP is OK+");
     return COMMAND_OK;
   }
+
   if (strnstr(response, "CMD ERR", response_pos)) {
     return COMMAND_ERROR;
   }
@@ -211,25 +205,19 @@ uint8_t genericCommandHandler(const char *response, uint8_t response_pos)
 
 bool sendCommand(const char *command, uint8_t (*callback)(const char*, uint8_t))
 {
-  //  return false;
   char response[200] = {0};
   uint8_t response_pos = 0;
   uint32_t uptime = millis();
-  //  Serial.println("P1");
+
   Serial.print("cmd: ");
   Serial.println(command);
   Serial1.write(command);
-  //  Serial.println("P2");
+
   while (millis() - uptime < COMMAND_TIMEOUT) {
-    //    Serial.print("P3 ");
-    //    Serial.println(millis() - uptime);
     while (Serial1.available()) {
-      //      Serial.println("P4");
       response[response_pos++] = Serial1.read();
       response_pos %= sizeof(response);
       response[response_pos] = '\0';
-      //      Serial.print("R ");
-      //      Serial.println(response_pos);
 
       uint8_t cb_result = COMMAND_CONTINUE;
 
@@ -337,10 +325,12 @@ void setPower(bool power_on)
   }
   if (!power_on) {
     sendCommand("AT+POWER_OFF\r\n", NULL);
+
+    is_connected = false;
     if (is_auto_switch) {
       setHeadphone(false);
     }
-    is_connected = false;
+
     powerDown();
   }
 
@@ -364,21 +354,9 @@ void connect(bool connect)
   is_connected = connect;
 }
 
-//void pair()
-//{
-//  is_powered = isPowered();
-//  if (!is_powered) return;
-//  sendCommand("AT+PAIR\r\n", NULL);
-//}
-
-
 uint8_t getPairedCallback(const char *response, uint8_t response_pos)
 {
   char *endptr;
-  //  Serial.print("getPairedCallback ");
-  //  Serial.print(response);
-  //  Serial.print(" ");
-  //  Serial.println(response_pos);
 
   if (strnstr(response, "OK+STATUS:", response_pos)) {
     char *space = (char *)memchr(response, ':', response_pos);
@@ -388,19 +366,19 @@ uint8_t getPairedCallback(const char *response, uint8_t response_pos)
     is_connected = strtoul(space + 1, &endptr, 10) > 0;
     Serial.print("PAIRED ");
     Serial.println(is_connected);
-    //    Serial.println(" RESP PAIR OK");
+
     return COMMAND_OK;
   }
   return COMMAND_CONTINUE;
 }
 
-bool isPaired()
+bool isConnected()
 {
   is_powered = isPowered();
   if (!is_powered) return;
 
   sendCommand("AT+STATUS?\r\n", getPairedCallback);
-  //  Serial.println("isPaired: END");
+
   if (is_auto_switch) {
     setHeadphone(is_connected);
   }
@@ -412,11 +390,6 @@ void setHeadphone(bool headphone_on)
   if (is_headphone == headphone_on) {
     return;
   }
-
-  //  Serial.print("setHeadphone ");
-  //  Serial.print(is_headphone);
-  //  Serial.print(" -> ");
-  //  Serial.println(headphone_on);
 
   if (headphone_on) {
     digitalWrite(HEADPHONE_EN_PIN, LOW);
@@ -446,10 +419,6 @@ bool getAutoSwitch()
 uint8_t getVolumeCallback(const char *response, uint8_t response_pos)
 {
   char *endptr;
-  //  Serial.print("getVolumeCallback ");
-  //  Serial.print(response);
-  //  Serial.print(" ");
-  //  Serial.println(response_pos);
 
   if (strnstr(response, "OK+VOL=", response_pos)) {
     char *space = (char *)memchr(response, '=', response_pos);
@@ -459,7 +428,7 @@ uint8_t getVolumeCallback(const char *response, uint8_t response_pos)
     volume = strtoul(space + 1, &endptr, 10);
     Serial.print("VOL ");
     Serial.println(volume);
-    //    Serial.println("RESP VOL OK");
+
     return COMMAND_OK;
   }
 
@@ -473,9 +442,8 @@ uint8_t getVolume()
 {
   is_powered = isPowered();
   if (!is_powered) return;
-  //  Serial.println("getVolume: START");
+
   sendCommand("AT+VOL?\r\n", getVolumeCallback);
-  //  Serial.println("getVolume: END");
   return volume;
 }
 
@@ -508,31 +476,23 @@ void handleWrite(uint8_t offset)
     Serial.println("No value written to register");
     return;
   }
-  //  Serial.print("Write: ");
-  //  Serial.print(offset);
-  //  Serial.print(" ");
-  //  Serial.println(value);
 
   switch (offset) {
     case MMP_KCZ_POWER:
       set_power_value = value;
       set_power = true;
-      //      setPower(value);
       break;
     case MMP_KCZ_CONNECT:
-      set_pair_value = value;
-      set_pair = true;
-      //      pair();
+      set_connect_value = value;
+      set_connect = true;
       break;
     case MMP_KCZ_HEADPHONE:
       set_headphone_value = value;
       set_headphone = true;
-      //      setHeadphone(value);
       break;
     case MMP_KCZ_VOLUME:
       set_volume_value = value;
       set_volume = true;
-      //      setVolume(value);
       break;
     case MMP_KCZ_AUTO_SWITCH:
       set_auto_switch_value = value;
@@ -544,80 +504,41 @@ void handleWrite(uint8_t offset)
   }
 }
 
-//void writeRegister(uint8_t offset)
-//{
-//  int rx = offset;
-//  Serial.print("WRITE [");
-//  Serial.print(rx);
-//  Serial.println("]");
-//  while(Wire.available() > 0){
-//    rx %= sizeof(regbuffer);
-//    regbuffer[rx++] = Wire.read();
-//  }
-//}
-
 void receiveEvent(int len) {
-  int rx = 0;
   Serial.print("[receiveEvent] Received Request:");
   Serial.println(len);
-  //  Serial.println();
-  if (len == 1) { // One Byte Data received -> Read Request Address
+  // One byte implies a read request.
+  if (len == 1) {
     reg = Wire.read();
-    //    Serial.print("Register Requested: ");
-    //    Serial.println(reg, HEX);
   } else {
-    reg = -1;
-    rx = Wire.read();
-    //    writeRegister(rx);
-    handleWrite(rx);
-    //    while(Wire.available() > 0){
-    //      rx %= sizeof(regbuffer);
-    //      regbuffer[rx++] = Wire.read();
-    //    }
+    handleWrite(Wire.read());
   }
 }
 
 void handleRead()
 {
-  //  Serial.println("handleRead");
   if (reg < 0) return;
   uint8_t status_byte = 0;
+
   switch (reg) {
     case MMP_KCZ_STATUS:
-      //      isPowered();
-      //      isPaired();
-      //      get_power = true;
-      //      get_pair = true;
       status_byte |= (is_powered ? 0x01 : 0x00) << STATUS_POWERED;
       status_byte |= (is_connected ? 0x01 : 0x00) << STATUS_CONNECTED;
       status_byte |= (is_headphone ? 0x01 : 0x00) << STATUS_HEADPHONE;
       status_byte |= (is_auto_switch ? 0x01 : 0x00) << STATUS_AUTO_SWITCH;
-      //      Serial.print("MMP_KCZ_STATUS: ");
-      //      Serial.println(status_byte);
       Wire.write(status_byte);
       break;
     case MMP_KCZ_POWER:
-      //      get_power = true;
-      //      Serial.print("MMP_KCZ_POWER: ");
-      //      Serial.println(is_powered);
       Wire.write(is_powered);
       break;
     case MMP_KCZ_CONNECT:
-      //      get_pair = true;
-      //      Serial.print("MMP_KCZ_CONNECT: ");
-      //      Serial.println(is_connected);
       Wire.write(is_connected);
       break;
     case MMP_KCZ_HEADPHONE:
-      //      Serial.print("MMP_KCZ_HEADPHONE: ");
-      //      Serial.println(is_headphone);
       Wire.write(is_headphone);
       break;
     case MMP_KCZ_VOLUME:
-      //      getVolume();
       get_volume = true;
-      //      Serial.print("MMP_KCZ_VOLUME: ");
-      //      Serial.println(volume);
       Wire.write(volume);
       break;
     case MMP_KCZ_AUTO_SWITCH:
@@ -625,13 +546,3 @@ void handleRead()
       break;
   }
 }
-
-//void requestEvent(){
-//  if (reg < 0) return;
-//  handleRead();
-//  // Read event
-////  int p = reg % sizeof(regbuffer); // Repeat Buffer
-////  unsigned char c = regbuffer[p];
-////  Serial.println("[requestEvent] Received Request.");
-////  Wire.write(c);
-//}
