@@ -214,50 +214,51 @@ bool sendCommand(const char *command, uint8_t (*callback)(const char*, uint8_t))
   Serial1.write(command);
 
   while (millis() - uptime < COMMAND_TIMEOUT) {
-    while (Serial1.available()) {
-      response[response_pos++] = Serial1.read();
-      response_pos %= sizeof(response);
-      response[response_pos] = '\0';
-
-      uint8_t cb_result = COMMAND_CONTINUE;
-
-      char *eol = NULL;
-      do {
-        eol = (char *)memchr(response, '\r', response_pos);
-        if (eol == NULL) {
-          eol = (char *)memchr(response, '\n', response_pos);
-        }
-        if (eol == NULL) {
-          break;
-        }
-
-        uint8_t line_length = eol - response;
-
-        Serial.print("> ");
-        Serial.println(response);
-
-        if (callback) {
-          cb_result = callback(response, line_length);
-        } else {
-          cb_result = genericCommandHandler(response, line_length);
-        }
-
-        if (cb_result == COMMAND_OK) {
-          return true;
-        }
-        if (cb_result == COMMAND_ERROR) {
-          return false;
-        }
-
-        char * remainder = eol + 1;
-        size_t remainder_length = response_pos - line_length - 1;
-
-        memmove(response, remainder, remainder_length);
-        response[remainder_length] = '\0';
-        response_pos = remainder_length;
-      } while (eol != NULL);
+    if (Serial1.available() <= 0) {
+      delay(100);
+      continue;
     }
-    delay(100);
+    response[response_pos++] = Serial1.read();
+    response_pos %= sizeof(response);
+    response[response_pos] = '\0';
+
+    uint8_t cb_result = COMMAND_CONTINUE;
+
+    char *eol = NULL;
+    do {
+      eol = (char *)memchr(response, '\r', response_pos);
+      if (eol == NULL) {
+        eol = (char *)memchr(response, '\n', response_pos);
+      }
+      if (eol == NULL) {
+        break;
+      }
+
+      uint8_t line_length = eol - response;
+
+      Serial.print("> ");
+      Serial.println(response);
+
+      if (callback) {
+        cb_result = callback(response, line_length);
+      } else {
+        cb_result = genericCommandHandler(response, line_length);
+      }
+
+      if (cb_result == COMMAND_OK) {
+        return true;
+      }
+      if (cb_result == COMMAND_ERROR) {
+        return false;
+      }
+
+      char * remainder = eol + 1;
+      size_t remainder_length = response_pos - line_length - 1;
+
+      memmove(response, remainder, remainder_length);
+      response[remainder_length] = '\0';
+      response_pos = remainder_length;
+    } while (eol != NULL);
   }
   if (millis() - uptime >= COMMAND_TIMEOUT) {
     Serial.println("Timeout while executing command.");
