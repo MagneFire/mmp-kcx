@@ -1,7 +1,12 @@
 # Miyoo Mini Plus Bluetooth Mod firmware
 
-This repository contains the code that runs on the ATmega32u4 microcontroller.
-This software essentially acts as a bridge between the KCX_BT_Emitter and the Miyoo Mini Plus.
+The goal of this project is to add Bluetooth functionality to the Miyoo Mini Plus without cutting into the casing, keeping the stock look.
+To achieve this a microcontroller is added between the Bluetooth chip and the Miyoo Mini Plus.
+
+This repository contains the code that runs on the microcontroller (ATmega32u4).
+The microcontroller software essentially acts as a bridge between the KCX_BT_Emitter (UART) and the Miyoo Mini Plus (I2C).
+
+## Power
 
 The KCX_BT_Emitter and the microcontroller are fed by the battery directly, this is needed because the KCX_BT_Emitter won't power on with a lower voltage (3v or 3v3).
 
@@ -43,3 +48,10 @@ Essentially it contains two new applications: `kcx` and `bluetooth`.
 The KCX_BT_Emitter and the Arduino Pro Micro are placed on the back, above the triggers.
 
 ![](./assets/mmp_back.jpg)
+
+
+## Resouces
+
+- Original mod: [https://www.reddit.com/r/MiyooMini/comments/15q2mdi/finally_i_got_my_mmp_bluetooth_enabled/](https://www.reddit.com/r/MiyooMini/comments/15q2mdi/finally_i_got_my_mmp_bluetooth_enabled/)
+- KCX_BT_Emitter forum with datasheets: [https://www.electro-tech-online.com/threads/kcx_bt_emitter-low-cost-bluetooth-bt-audio-module.158156/](https://www.electro-tech-online.com/threads/kcx_bt_emitter-low-cost-bluetooth-bt-audio-module.158156/)
+- KCX_BT_Emitter example code and additional information: [https://github.com/Mark-MDO47/BluetoothAudioTransmitter_KCX_BT_EMITTER](https://github.com/Mark-MDO47/BluetoothAudioTransmitter_KCX_BT_EMITTER)
