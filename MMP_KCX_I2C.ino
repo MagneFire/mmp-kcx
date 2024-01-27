@@ -30,6 +30,8 @@
 
 #define CONNECTION_STATE_POLL_INTERVAL 5000
 
+#define DEFAULT_RETRIES 3
+
 uint32_t prev_poll_time = 0;
 
 bool is_powered = true;
@@ -65,6 +67,8 @@ void handleWrite(uint8_t offset);
 void writeRegister(uint8_t offset);
 
 bool sendCommand(const char *command, uint8_t (*callback)(const char*, uint8_t));
+bool sendCommandWithRetries(const char *command, uint8_t (*callback)(const char*, uint8_t), uint8_t retries);
+bool sendCommandWithDefaultRetries(const char *command, uint8_t (*callback)(const char*, uint8_t));
 uint8_t genericCommandHandler(const char *response, uint8_t response_pos);
 
 bool isPowered();
@@ -241,6 +245,20 @@ bool sendCommand(const char *command, uint8_t (*callback)(const char*, uint8_t))
   return false;
 }
 
+bool sendCommandWithRetries(const char *command, uint8_t (*callback)(const char*, uint8_t), uint8_t retries)
+{
+  bool result = false;
+  while (!result && retries--) {
+    result = sendCommand(command, callback);
+  }
+  return result;
+}
+
+bool sendCommandWithDefaultRetries(const char *command, uint8_t (*callback)(const char*, uint8_t))
+{
+  return sendCommandWithRetries(command, callback, DEFAULT_RETRIES);
+}
+
 bool isPowered()
 {
   return is_powered;
@@ -274,9 +292,9 @@ void connect(bool connect)
   }
 
   if (connect) {
-    sendCommand("AT+PAIR\r\n", NULL);
+    sendCommandWithDefaultRetries("AT+PAIR\r\n", NULL);
   } else {
-    sendCommand("AT+DISCON\r\n", NULL);
+    sendCommandWithDefaultRetries("AT+DISCON\r\n", NULL);
   }
   is_connected = connect;
 }
@@ -303,7 +321,7 @@ bool isConnected()
 {
   if (!is_powered) return;
 
-  sendCommand("AT+STATUS?\r\n", getPairedCallback);
+  sendCommandWithDefaultRetries("AT+STATUS?\r\n", getPairedCallback);
 
   if (is_auto_switch) {
     setHeadphone(is_connected);
@@ -368,7 +386,7 @@ uint8_t getVolume()
 {
   if (!is_powered) return;
 
-  sendCommand("AT+VOL?\r\n", getVolumeCallback);
+  sendCommandWithDefaultRetries("AT+VOL?\r\n", getVolumeCallback);
   return volume;
 }
 
@@ -380,7 +398,7 @@ void setVolume(uint8_t set_volume)
   if (volume == set_volume) return;
 
   snprintf(buffer, sizeof(buffer), "AT+VOL=%d\r\n", set_volume);
-  uint8_t cmd_result = sendCommand(buffer, NULL);
+  uint8_t cmd_result = sendCommandWithDefaultRetries(buffer, NULL);
   if (!cmd_result) {
     Serial.println("Failure setting volume");
     return;
