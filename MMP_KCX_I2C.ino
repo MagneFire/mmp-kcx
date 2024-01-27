@@ -77,8 +77,6 @@ uint8_t getVolumeCallback(const char *response, uint8_t response_pos);
 uint8_t getVolume();
 void setVolume(uint8_t set_volume);
 
-void powerDown();
-
 #define COMMAND_TIMEOUT 1000
 
 typedef enum CommandResult_t
@@ -241,44 +239,6 @@ bool sendCommand(const char *command, uint8_t (*callback)(const char*, uint8_t))
     Serial.println("Timeout while executing command.");
   }
   return false;
-}
-
-void powerUp()
-{
-  set_sleep_mode(SLEEP_MODE_IDLE);
-//    power_adc_disable();
-//    power_usart0_enable();
-//    power_spi_enable();
-//    power_timer1_enable();
-//    power_timer2_enable();
-//    power_timer3_enable();
-//    power_usart1_enable();
-    power_usb_enable();
-}
-
-void powerDown()
-{
-  Serial.println("Powerdown enter");
-  //  // Power down.
-//    SMCR |= (1<<SM1);
-//    power_adc_disable();
-//    power_usart0_disable();
-//    power_spi_disable();
-//  //  power_twi_disable();
-//    power_timer1_disable();
-//    power_timer2_disable();
-//    power_timer3_disable();
-//    power_usart1_disable();
-    power_usb_disable();
-  //   // Freeze the USB Clock
-  //  USBCON |= (1 << FRZCLK);
-  //  // Disable the USB Clock (PPL)
-  //  PLLCSR &= ~(1 << PLLE);
-  //  // Disable the USB
-  //  USBCON &=  ~(1 << USBE);
-  //  LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-  Serial.println("Powerdown leave");
 }
 
 bool isPowered()
