@@ -166,6 +166,9 @@ void loop() {
   if (get_volume) {
     get_volume = false;
     getVolume();
+    if (volume != set_volume_value) {
+      setVolume(set_volume_value);
+    }
   }
 }
 
