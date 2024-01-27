@@ -417,29 +417,28 @@ void setVolume(uint8_t set_volume)
   char buffer[20];
   if (set_volume > 31) set_volume = 31;
   if (!is_powered) return;
-  if (volume == set_volume) {
-    return;
-  }
+  if (volume == set_volume) return;
 
   snprintf(buffer, sizeof(buffer), "AT+VOL=%d\r\n", set_volume);
   uint8_t cmd_result = sendCommand(buffer, NULL);
-  if (cmd_result) {
-    volume = set_volume;
-  } else {
+  if (!cmd_result) {
     Serial.println("Failure setting volume");
+    return;
   }
+
+  volume = set_volume;
 }
 
 void handleWrite(uint8_t offset)
 {
   uint8_t value = 0;
 
-  if (Wire.available() > 0) {
-    value = Wire.read();
-  } else {
+  if (Wire.available() <= 0) {
     Serial.println("No value written to register");
     return;
   }
+
+  value = Wire.read();
 
   switch (offset) {
     case MMP_KCZ_POWER:
