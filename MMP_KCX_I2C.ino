@@ -7,6 +7,7 @@
 #define CON_PIN 4
 #define HEADPHONE_EN_PIN 5
 #define POWER_DETECT_PIN 6
+#define BT_POWER_EN_PIN 7
 
 #define I2C_ADDR        0x17
 
@@ -51,7 +52,6 @@ uint8_t set_volume_value = 0;
 bool set_auto_switch = false;
 bool set_auto_switch_value = false;
 
-bool get_power = true;
 bool get_pair = true;
 bool get_volume = true;
 
@@ -109,15 +109,9 @@ char *strnstr(const char *s, const char *find, size_t slen)
 }
 
 void setup() {
-  pinMode(I2C_SDA, INPUT);
-  pinMode(I2C_SCL, INPUT);
-  pinMode(POWER_DETECT_PIN, INPUT);
-  digitalWrite(CON_PIN, HIGH);
-  pinMode(CON_PIN, OUTPUT);
   pinMode(HEADPHONE_EN_PIN, INPUT);
 
   Serial.begin(115200);
-  Serial1.begin(115200);
 
   Wire.onReceive(receiveEvent);
   Wire.onRequest(handleRead);
@@ -125,12 +119,6 @@ void setup() {
   // Ensures no internal pullup is used!
   pinMode(I2C_SDA, INPUT);
   pinMode(I2C_SCL, INPUT);
-
-  // Wait for the BT chip to be online.
-  for (uint8_t i = 0; i < 10; i++) {
-    isPowered();
-    if (is_powered) break;
-  }
 }
 
 void loop() {
@@ -146,13 +134,6 @@ void loop() {
   if (millis() - prev_poll_time > CONNECTION_STATE_POLL_INTERVAL) {
     prev_poll_time = millis();
     isConnected();
-    bool powerState = digitalRead(POWER_DETECT_PIN);
-    Serial.print("Power state ");
-    Serial.println(powerState);
-    if (powerState == LOW && is_powered) {
-      Serial.println("Device was shut down, powerdown now.");
-      setPower(false);
-    }
   }
 
   if (set_power) {
@@ -176,10 +157,6 @@ void loop() {
     setAutoSwitch(set_auto_switch_value);
   }
 
-  if (get_power) {
-    get_power = false;
-    isPowered();
-  }
   if (get_pair) {
     get_pair = false;
     isConnected();
@@ -306,33 +283,23 @@ void powerDown()
 
 bool isPowered()
 {
-  is_powered = sendCommand("AT+\r\n", NULL);
   return is_powered;
 }
 
 void setPower(bool power_on)
 {
-  is_powered = isPowered();
   if (is_powered == power_on) {
     return;
   }
 
+  Serial.print("Power -> ");
+  Serial.println(power_on ? "ON" : "OFF");
+
+  digitalWrite(BT_POWER_EN_PIN, power_on ? HIGH : LOW);
   if (power_on) {
-    powerUp();
-    // Wakes the chip when in poweroff.
-    digitalWrite(CON_PIN, LOW);
-    delay(100);
-    digitalWrite(CON_PIN, HIGH);
-  }
-  if (!power_on) {
-    sendCommand("AT+POWER_OFF\r\n", NULL);
-
-    is_connected = false;
-    if (is_auto_switch) {
-      setHeadphone(false);
-    }
-
-    powerDown();
+    Serial1.begin(115200);
+  } else {
+    Serial1.end();
   }
 
   is_powered = power_on;
@@ -340,7 +307,6 @@ void setPower(bool power_on)
 
 void connect(bool connect)
 {
-  is_powered = isPowered();
   if (!is_powered) return;
 
   if (is_connected == connect) {
@@ -375,7 +341,6 @@ uint8_t getPairedCallback(const char *response, uint8_t response_pos)
 
 bool isConnected()
 {
-  is_powered = isPowered();
   if (!is_powered) return;
 
   sendCommand("AT+STATUS?\r\n", getPairedCallback);
@@ -441,7 +406,6 @@ uint8_t getVolumeCallback(const char *response, uint8_t response_pos)
 
 uint8_t getVolume()
 {
-  is_powered = isPowered();
   if (!is_powered) return;
 
   sendCommand("AT+VOL?\r\n", getVolumeCallback);
@@ -452,7 +416,6 @@ void setVolume(uint8_t set_volume)
 {
   char buffer[20];
   if (set_volume > 31) set_volume = 31;
-  is_powered = isPowered();
   if (!is_powered) return;
   if (volume == set_volume) {
     return;
