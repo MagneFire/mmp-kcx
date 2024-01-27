@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
+#include <EEPROM.h>
 
 #define I2C_SDA 2
 #define I2C_SCL 3
@@ -32,6 +33,8 @@
 
 #define DEFAULT_RETRIES 3
 
+#define EEPROM_VOLUME_ADDRESS 0
+
 uint32_t prev_poll_time = 0;
 
 bool is_powered = true;
@@ -58,6 +61,8 @@ bool get_pair = true;
 bool get_volume = true;
 
 int reg = 0;
+
+uint8_t eeprom_volume = 0;
 
 void receiveEvent(int len);
 void requestEvent();
@@ -112,6 +117,9 @@ char *strnstr(const char *s, const char *find, size_t slen)
 
 void setup() {
   pinMode(HEADPHONE_EN_PIN, INPUT);
+
+  eeprom_volume = EEPROM.read(EEPROM_VOLUME_ADDRESS);
+  set_volume_value = eeprom_volume;
 
   Serial.begin(115200);
 
@@ -279,6 +287,8 @@ void setPower(bool power_on)
   digitalWrite(BT_POWER_EN_PIN, power_on ? HIGH : LOW);
   if (power_on) {
     Serial1.begin(115200);
+    set_volume_value = eeprom_volume;
+    set_volume = true;
   } else {
     Serial1.end();
   }
@@ -399,6 +409,11 @@ void setVolume(uint8_t set_volume)
   if (set_volume > 31) set_volume = 31;
   if (!is_powered) return;
   if (volume == set_volume) return;
+
+  if (eeprom_volume != set_volume) {
+    eeprom_volume = set_volume;
+    EEPROM.write(EEPROM_VOLUME_ADDRESS, eeprom_volume);
+  }
 
   snprintf(buffer, sizeof(buffer), "AT+VOL=%d\r\n", set_volume);
   uint8_t cmd_result = sendCommandWithDefaultRetries(buffer, NULL);
