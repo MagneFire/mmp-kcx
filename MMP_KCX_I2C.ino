@@ -468,8 +468,6 @@ void handleWrite(uint8_t offset)
 }
 
 void receiveEvent(int len) {
-  Serial.print("[receiveEvent] Received Request:");
-  Serial.println(len);
   // One byte implies a read request.
   if (len == 1) {
     reg = Wire.read();
